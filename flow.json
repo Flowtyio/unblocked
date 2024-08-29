@@ -15,6 +15,7 @@
     }
   },
   "contracts": {
+    "TenantService": "./contracts/TenantService.cdc",
     "NonFungibleToken": {
       "source": "./node_modules/@flowtyio/flow-contracts/contracts/NonFungibleToken.cdc",
       "aliases": {
@@ -27,7 +28,52 @@
   "deployments": {
     "emulator": {
       "emulator-account": [
-        "NonFungibleToken"
+        "NonFungibleToken",
+        {
+          "name": "TenantService",
+          "args": [
+            {
+              "type": "String",
+              "value": "foo"
+            },
+            {
+              "type": "String",
+              "value": "bar"
+            },
+            {
+              "type": "String",
+              "value": "baz"
+            },
+            {
+              "type": "Path",
+              "value": {
+                "domain": "storage",
+                "identifier": "TenantServiceCollectionPath"
+              }
+            },
+            {
+              "type": "Path",
+              "value": {
+                "domain": "storage",
+                "identifier": "TenantServiceAdmin"
+              }
+            },
+            {
+              "type": "Path",
+              "value": {
+                "domain": "public",
+                "identifier": "TenantServicePublicPath"
+              }
+            },
+            {
+              "type": "Path",
+              "value": {
+                "domain": "public",
+                "identifier": "TenantServicePublicPathCustom"
+              }
+            }
+          ]
+        }
       ]
     }
   }
