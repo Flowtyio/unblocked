@@ -1,13 +1,16 @@
 import "NonFungibleToken"
+import "Burner"
 
-pub contract NFTCollections {
+access(all) contract NFTCollections {
 
-    pub let version: UInt32
-    pub let NFT_COLLECTION_MANAGER_PATH: StoragePath
+    access(all) let version: UInt32
+    access(all) let NFT_COLLECTION_MANAGER_PATH: StoragePath
 
-    pub event ContractInitialized()
-    pub event Withdraw(address: Address, id: UInt64)
-    pub event Deposit(address: Address, id: UInt64)
+    access(all) event ContractInitialized()
+    access(all) event Withdraw(address: Address, id: UInt64)
+    access(all) event Deposit(address: Address, id: UInt64)
+
+    access(all) entitlement Owner
 
     init() {
         self.version = 1
@@ -15,48 +18,48 @@ pub contract NFTCollections {
         emit ContractInitialized()
     }
 
-    pub fun getVersion(): UInt32 {
+    access(all) fun getVersion(): UInt32 {
         return self.version
     }
 
-    pub resource interface WrappedNFT {
-        pub fun getContractName(): String
-        pub fun getAddress(): Address
-        pub fun getCollectionPath(): PublicPath
-        pub fun borrowNFT(): &NonFungibleToken.NFT
+    access(all) resource interface WrappedNFT {
+        access(all) fun getContractName(): String
+        access(all) fun getAddress(): Address
+        access(all) fun getCollectionPath(): PublicPath
+        access(all) fun borrowNFT(): &{NonFungibleToken.NFT}
     }
 
-    pub resource interface Provider {
-        pub fun withdraw(address: Address, withdrawID: UInt64): @NonFungibleToken.NFT?
-        pub fun withdrawWrapper(address: Address, withdrawID: UInt64): @NFTWrapper?
-        pub fun batchWithdraw(address: Address, batch: [UInt64], into: &NonFungibleToken.Collection)
-        pub fun batchWithdrawWrappers(address: Address, batch: [UInt64]): @Collection?
-        pub fun borrowWrapper(address: Address, id: UInt64): &NFTWrapper?
-        pub fun borrowNFT(address: Address, id: UInt64): &NonFungibleToken.NFT?
+    access(all) resource interface Provider {
+        access(Owner) fun withdraw(address: Address, withdrawID: UInt64): @{NonFungibleToken.NFT}?
+        access(Owner) fun withdrawWrapper(address: Address, withdrawID: UInt64): @NFTWrapper?
+        access(Owner) fun batchWithdraw(address: Address, batch: [UInt64], into: &{NonFungibleToken.Collection})
+        access(Owner) fun batchWithdrawWrappers(address: Address, batch: [UInt64]): @Collection?
+        access(all) fun borrowWrapper(address: Address, id: UInt64): &NFTWrapper?
+        access(all) fun borrowNFT(address: Address, id: UInt64): &{NonFungibleToken.NFT}?
     }
 
-    pub resource interface Receiver {
-        pub fun deposit(contractName: String, address: Address, collectionPath: PublicPath, token: @NonFungibleToken.NFT)
-        pub fun depositWrapper(wrapper: @NFTWrapper)
-        pub fun batchDeposit(contractName: String, address: Address, collectionPath: PublicPath, batch: @NonFungibleToken.Collection)
-        pub fun batchDepositWrapper(batch: @Collection)
+    access(all) resource interface Receiver {
+        access(all) fun deposit(contractName: String, address: Address, collectionPath: PublicPath, token: @{NonFungibleToken.NFT})
+        access(all) fun depositWrapper(wrapper: @NFTWrapper)
+        access(all) fun batchDeposit(contractName: String, address: Address, collectionPath: PublicPath, batch: @{NonFungibleToken.Collection})
+        access(all) fun batchDepositWrapper(batch: @Collection)
     }
 
-    pub resource interface CollectionPublic {
-        pub fun borrowWrapper(address: Address, id: UInt64): &NFTWrapper?
-        pub fun borrowNFT(address: Address, id: UInt64): &NonFungibleToken.NFT?
+    access(all) resource interface CollectionPublic {
+        access(all) fun borrowWrapper(address: Address, id: UInt64): &NFTWrapper?
+        access(all) fun borrowNFT(address: Address, id: UInt64): &{NonFungibleToken.NFT}?
 
-        pub fun deposit(contractName: String, address: Address, collectionPath: PublicPath, token: @NonFungibleToken.NFT)
-        pub fun depositWrapper(wrapper: @NFTWrapper)
-        pub fun batchDeposit(contractName: String, address: Address, collectionPath: PublicPath, batch: @NonFungibleToken.Collection)
-        pub fun batchDepositWrapper(batch: @Collection)
+        access(all) fun deposit(contractName: String, address: Address, collectionPath: PublicPath, token: @{NonFungibleToken.NFT})
+        access(all) fun depositWrapper(wrapper: @NFTWrapper)
+        access(all) fun batchDeposit(contractName: String, address: Address, collectionPath: PublicPath, batch: @{NonFungibleToken.Collection})
+        access(all) fun batchDepositWrapper(batch: @Collection)
 
-        pub fun getIDs(): {Address:[UInt64]}
+        access(all) fun getIDs(): {Address:[UInt64]}
     }
 
     // A resource for managing collections of NFTs
     //
-    pub resource NFTCollectionManager {
+    access(all) resource NFTCollectionManager {
 
         access(self) let collections: @{String: Collection}
 
@@ -64,11 +67,11 @@ pub contract NFTCollections {
             self.collections <- {}
         }
 
-        pub fun getCollectionNames(): [String] {
+        access(all) fun getCollectionNames(): [String] {
             return self.collections.keys
         }
 
-        pub fun createOrBorrowCollection(_ namespace: String): &Collection? {
+        access(all) fun createOrBorrowCollection(_ namespace: String): &Collection? {
             if self.collections[namespace] == nil {
                 return self.createCollection(namespace)
             } else {
@@ -76,47 +79,43 @@ pub contract NFTCollections {
             }
         }
 
-        pub fun createCollection(_ namespace: String): &Collection? {
+        access(all) fun createCollection(_ namespace: String): &Collection? {
             pre {
                 self.collections[namespace] == nil: "Collection with that namespace already exists"
             }
             let alwaysEmpty <- self.collections[namespace] <- create Collection()
             destroy alwaysEmpty
-            return &self.collections[namespace] as &Collection?
+            return &self.collections[namespace]
         }
 
-        pub fun borrowCollection(_ namespace: String): &Collection? {
+        access(all) fun borrowCollection(_ namespace: String): &Collection? {
             pre {
                 self.collections[namespace] != nil: "Collection with that namespace not found"
             }
-            return &self.collections[namespace] as &Collection?
-        }
-
-        destroy() {
-            destroy self.collections
+            return &self.collections[namespace]
         }
     }
 
     // Creates and returns a new NFTCollectionManager resource for managing many
     // different Collections
     //
-    pub fun createNewNFTCollectionManager(): @NFTCollectionManager {
+    access(all) fun createNewNFTCollectionManager(): @NFTCollectionManager {
         return <- create NFTCollectionManager()
     }
 
     // An NFT wrapped with useful information
     //
-    pub resource NFTWrapper : WrappedNFT {
+    access(all) resource NFTWrapper : WrappedNFT {
         access(self) let contractName: String
         access(self) let address: Address
         access(self) let collectionPath: PublicPath
-        access(self) var nft: @NonFungibleToken.NFT?
+        access(self) var nft: @{NonFungibleToken.NFT}?
 
         init(
             contractName: String,
             address: Address,
             collectionPath: PublicPath,
-            token: @NonFungibleToken.NFT
+            token: @{NonFungibleToken.NFT}
         ) {
             self.contractName = contractName
             self.address = address
@@ -124,47 +123,44 @@ pub contract NFTCollections {
             self.nft <- token
         }
 
-        pub fun getContractName(): String {
+        access(all) fun getContractName(): String {
             return self.contractName
         }
 
-        pub fun getAddress(): Address {
+        access(all) fun getAddress(): Address {
             return self.address
         }
 
-        pub fun getCollectionPath(): PublicPath {
+        access(all) fun getCollectionPath(): PublicPath {
             return self.collectionPath
         }
 
-        pub fun borrowNFT(): &NonFungibleToken.NFT {
+        access(all) fun borrowNFT(): &{NonFungibleToken.NFT} {
             pre {
                 self.nft != nil: "Wrapped NFT is nil"
             }
-            let optionalNft <- self.nft <- nil
-            let nft <- optionalNft!!
-            let ret = &nft as &NonFungibleToken.NFT
-            self.nft <-! nft
-            return ret!!
+
+            let ref: &{NonFungibleToken.NFT}? = &self.nft
+            assert(ref != nil, message: "nft is nil")
+
+            return ref!
         }
 
-        access(contract) fun unwrapNFT(): @NonFungibleToken.NFT {
+        access(contract) fun unwrapNFT(): @{NonFungibleToken.NFT} {
             pre {
                 self.nft != nil: "Wrapped NFT is nil"
             }
             let optionalNft <- self.nft <- nil
-            let nft <- optionalNft!!
+            let nft <- optionalNft!
             return <- nft
         }
 
-        destroy() {
-            pre {
-                self.nft == nil: "Wrapped NFT is not nil"
-            }
-            destroy self.nft
+        access(contract) fun burnCallback() {
+            assert(self.nft == nil, message: "Wrapped NFT is not nil")
         }
     }
 
-    pub resource Collection : CollectionPublic, Provider, Receiver {
+    access(all) resource Collection : CollectionPublic, Provider, Receiver {
 
         access(self) var collections: @{Address: ShardedNFTWrapperCollection}
 
@@ -172,7 +168,7 @@ pub contract NFTCollections {
             self.collections <- {}
         }
 
-        pub fun deposit(contractName: String, address: Address, collectionPath: PublicPath, token: @NonFungibleToken.NFT) {
+        access(all) fun deposit(contractName: String, address: Address, collectionPath: PublicPath, token: @{NonFungibleToken.NFT}) {
             let wrapper <- create NFTWrapper(
                 contractName: contractName,
                 address: address,
@@ -189,7 +185,7 @@ pub contract NFTCollections {
             self.collections[address] <-! collection
         }
 
-        pub fun depositWrapper(wrapper: @NFTWrapper) {
+        access(all) fun depositWrapper(wrapper: @NFTWrapper) {
             let address = wrapper.getAddress()
             if self.collections[address] == nil {
                 self.collections[address] <-! NFTCollections.createEmptyShardedNFTWrapperCollection()
@@ -200,7 +196,7 @@ pub contract NFTCollections {
             self.collections[address] <-! collection
         }
 
-        pub fun batchDeposit(contractName: String, address: Address, collectionPath: PublicPath, batch: @NonFungibleToken.Collection) {
+        access(all) fun batchDeposit(contractName: String, address: Address, collectionPath: PublicPath, batch: @{NonFungibleToken.Collection}) {
             let keys = batch.getIDs()
             for key in keys {
                 self.deposit(
@@ -213,7 +209,7 @@ pub contract NFTCollections {
             destroy batch
         }
 
-        pub fun batchDepositWrapper(batch: @Collection) {
+        access(all) fun batchDepositWrapper(batch: @Collection) {
             var addressMap = batch.getIDs()
             for address in addressMap.keys {
                 let ids = addressMap[address] ?? []
@@ -229,7 +225,7 @@ pub contract NFTCollections {
             destroy batch
         }
 
-        pub fun withdraw(address: Address, withdrawID: UInt64): @NonFungibleToken.NFT {
+        access(Owner) fun withdraw(address: Address, withdrawID: UInt64): @{NonFungibleToken.NFT} {
             if self.collections[address] == nil {
                 panic("No NFT with that Address exists")
             }
@@ -242,7 +238,7 @@ pub contract NFTCollections {
             return <- nft
         }
 
-        pub fun withdrawWrapper(address: Address, withdrawID: UInt64): @NFTWrapper {
+        access(Owner) fun withdrawWrapper(address: Address, withdrawID: UInt64): @NFTWrapper {
             if self.collections[address] == nil {
                 panic("No NFT with that Address exists")
             }
@@ -253,18 +249,14 @@ pub contract NFTCollections {
             return <- wrapper
         }
 
-        pub fun batchWithdraw(address: Address, batch: [UInt64], into: &NonFungibleToken.Collection) {
+        access(Owner) fun batchWithdraw(address: Address, batch: [UInt64], into: &{NonFungibleToken.Collection}) {
             for id in batch {
-                into.deposit(
-                    token: <- self.withdraw(
-                        address: address,
-                        withdrawID: id
-                    )
-                )
+                let nft <- self.withdraw(address: address,withdrawID: id)
+                into.deposit(token: <- nft)
             }
         }
 
-        pub fun batchWithdrawWrappers(address: Address, batch: [UInt64]): @Collection {
+        access(Owner) fun batchWithdrawWrappers(address: Address, batch: [UInt64]): @Collection {
             var into <- NFTCollections.createEmptyCollection()
             for id in batch {
                 into.depositWrapper(
@@ -277,7 +269,7 @@ pub contract NFTCollections {
             return <- into
         }
 
-        pub fun getIDs(): {Address:[UInt64]} {
+        access(all) fun getIDs(): {Address:[UInt64]} {
             var ids: {Address:[UInt64]} = {}
             for key in self.collections.keys {
                 ids[key] = []
@@ -288,11 +280,11 @@ pub contract NFTCollections {
             return ids
         }
 
-        pub fun borrowNFT(address: Address, id: UInt64): &NonFungibleToken.NFT {
+        access(all) fun borrowNFT(address: Address, id: UInt64): &{NonFungibleToken.NFT} {
             return self.borrowWrapper(address: address, id: id)!.borrowNFT()
         }
 
-        pub fun borrowWrapper(address: Address, id: UInt64): &NFTWrapper? {
+        access(all) fun borrowWrapper(address: Address, id: UInt64): &NFTWrapper? {
             if self.collections[address] == nil {
                 panic("No NFT with that Address exists")
             }
@@ -303,16 +295,20 @@ pub contract NFTCollections {
             return collection!.borrowWrapper(id: id)
         }
 
-        destroy() {
-            destroy self.collections
+        access(contract) fun burnCallback() {
+            let keys = self.collections.keys
+            for k in keys {
+                let collection: @NFTCollections.ShardedNFTWrapperCollection <- self.collections.remove(key: k)!
+                Burner.burn(<-collection)
+            }
         }
     }
 
-    pub fun createEmptyCollection(): @Collection {
+    access(all) fun createEmptyCollection(): @Collection {
         return <- create NFTCollections.Collection()
     }
 
-    pub resource ShardedNFTWrapperCollection {
+    access(all) resource ShardedNFTWrapperCollection {
 
         access(self) var collections: @{UInt64: NFTWrapperCollection}
         access(self) let numBuckets: UInt64
@@ -327,14 +323,14 @@ pub contract NFTCollections {
             }
         }
 
-        pub fun deposit(wrapper: @NFTWrapper) {
+        access(all) fun deposit(wrapper: @NFTWrapper) {
             let bucket = wrapper.borrowNFT().id % self.numBuckets
             let collection <- self.collections.remove(key: bucket)!
             collection.deposit(wrapper: <-wrapper)
             self.collections[bucket] <-! collection
         }
 
-        pub fun batchDeposit(batch: @ShardedNFTWrapperCollection) {
+        access(all) fun batchDeposit(batch: @ShardedNFTWrapperCollection) {
             let keys = batch.getIDs()
             for key in keys {
                 self.deposit(wrapper: <- batch.withdraw(withdrawID: key))
@@ -342,13 +338,13 @@ pub contract NFTCollections {
             destroy batch
         }
 
-        pub fun withdraw(withdrawID: UInt64): @NFTWrapper {
+        access(Owner) fun withdraw(withdrawID: UInt64): @NFTWrapper {
             let bucket = withdrawID % self.numBuckets
             let wrapper <- self.collections[bucket]?.withdraw(withdrawID: withdrawID)!
             return <-wrapper
         }
 
-        pub fun batchWithdraw(batch: [UInt64]): @ShardedNFTWrapperCollection {
+        access(Owner) fun batchWithdraw(batch: [UInt64]): @ShardedNFTWrapperCollection {
             var batchCollection <- NFTCollections.createEmptyShardedNFTWrapperCollection()
             for id in batch {
                 batchCollection.deposit(wrapper: <-self.withdraw(withdrawID: id))
@@ -356,7 +352,7 @@ pub contract NFTCollections {
             return <- batchCollection
         }
 
-        pub fun getIDs(): [UInt64] {
+        access(all) fun getIDs(): [UInt64] {
             var ids: [UInt64] = []
             for key in self.collections.keys {
                 for id in self.collections[key]?.getIDs() ?? [] {
@@ -366,7 +362,7 @@ pub contract NFTCollections {
             return ids
         }
 
-        pub fun borrowWrapper(id: UInt64): &NFTWrapper? {
+        access(all) fun borrowWrapper(id: UInt64): &NFTWrapper? {
             let bucket = id % self.numBuckets
             let collection = &self.collections[bucket] as &NFTWrapperCollection?
             if collection == nil {
@@ -375,18 +371,22 @@ pub contract NFTCollections {
             return collection!.borrowWrapper(id: id)
         }
 
-        destroy() {
-            destroy self.collections
+        access(contract) fun burnCallback() {
+            let keys = self.collections.keys
+            for k in keys {
+                let collection: @NFTCollections.NFTWrapperCollection <- self.collections.remove(key: k)!
+                Burner.burn(<-collection)
+            }
         }
     }
 
-    pub fun createEmptyShardedNFTWrapperCollection(): @ShardedNFTWrapperCollection {
+    access(all) fun createEmptyShardedNFTWrapperCollection(): @ShardedNFTWrapperCollection {
         return <- create NFTCollections.ShardedNFTWrapperCollection(32)
     }
 
     // A collection of NFTWrappers
     //
-    pub resource NFTWrapperCollection {
+    access(all) resource NFTWrapperCollection {
 
         access(self) var wrappers: @{UInt64: NFTWrapper}
 
@@ -394,7 +394,7 @@ pub contract NFTCollections {
             self.wrappers <- {}
         }
 
-        pub fun deposit(wrapper: @NFTWrapper) {
+        access(all) fun deposit(wrapper: @NFTWrapper) {
             let address = wrapper.getAddress()
             let id = wrapper.borrowNFT().id
             let oldWrapper <- self.wrappers[id] <- wrapper
@@ -405,7 +405,7 @@ pub contract NFTCollections {
             destroy oldWrapper
         }
 
-        pub fun batchDeposit(batch: @NFTWrapperCollection) {
+        access(all) fun batchDeposit(batch: @NFTWrapperCollection) {
             let keys = batch.getIDs()
             for key in keys {
                 self.deposit(wrapper: <-batch.withdraw(withdrawID: key))
@@ -413,14 +413,14 @@ pub contract NFTCollections {
             destroy batch
         }
 
-        pub fun withdraw(withdrawID: UInt64): @NFTWrapper {
+        access(Owner) fun withdraw(withdrawID: UInt64): @NFTWrapper {
             let wrapper <- self.wrappers.remove(key: withdrawID)
                 ?? panic("Cannot withdraw: NFTWrapper does not exist in the collection")
             emit Withdraw(address: wrapper.getAddress(), id: withdrawID)
             return <- wrapper
         }
 
-        pub fun batchWithdraw(batch: [UInt64]): @NFTWrapperCollection {
+        access(Owner) fun batchWithdraw(batch: [UInt64]): @NFTWrapperCollection {
             var batchCollection <- create NFTWrapperCollection()
             for id in batch {
                 batchCollection.deposit(wrapper: <-self.withdraw(withdrawID: id))
@@ -428,20 +428,24 @@ pub contract NFTCollections {
             return <- batchCollection
         }
 
-        pub fun getIDs(): [UInt64] {
+        access(all) fun getIDs(): [UInt64] {
             return self.wrappers.keys
         }
 
-        pub fun borrowWrapper(id: UInt64): &NFTWrapper? {
+        access(all) fun borrowWrapper(id: UInt64): &NFTWrapper? {
             return &self.wrappers[id] as &NFTWrapper?
         }
 
-        destroy() {
-            destroy self.wrappers
+        access(contract) fun burnCallback() {
+            let keys = self.wrappers.keys
+            for k in keys {
+                let wrapper: @NFTCollections.NFTWrapper <- self.wrappers.remove(key: k)!
+                Burner.burn(<-wrapper)
+            }
         }
     }
 
-    pub fun createEmptyNFTWrapperCollection(): @NFTWrapperCollection {
+    access(all) fun createEmptyNFTWrapperCollection(): @NFTWrapperCollection {
         return <- create NFTCollections.NFTWrapperCollection()
     }
 }
