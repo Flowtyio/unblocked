@@ -58,7 +58,7 @@ Identified Tenant Serive Addresses:
     ```
 1. Create the file `tenant-account.pkey`
 1. Put the key of the account you are migrating in this file
-    1. **NOTE: Ensure that the index of the key you are using matches the key index (set to 0 currently)
+    1. **NOTE: Ensure that the index of the key you are using matches the key index (set to 0 currently)**
 1. You can ensure that you have the necessary access to an account by running a dummy transaction which does nothing:
     ```
     flow-c1 transactions send ./transactions/dummy.cdc -signer tenant-account -n mainnet
