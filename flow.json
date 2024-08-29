@@ -16,6 +16,8 @@
   },
   "contracts": {
     "TenantService": "./contracts/TenantService.cdc",
+    "NFTCollections": "./contracts/NFTCollections.cdc",
+    "StorefrontService": "./contracts/StorefrontService.cdc",
     "NonFungibleToken": {
       "source": "./node_modules/@flowtyio/flow-contracts/contracts/NonFungibleToken.cdc",
       "aliases": {
@@ -29,6 +31,7 @@
     "emulator": {
       "emulator-account": [
         "NonFungibleToken",
+        "NFTCollections",
         {
           "name": "TenantService",
           "args": [
@@ -71,6 +74,19 @@
                 "domain": "public",
                 "identifier": "TenantServicePublicPathCustom"
               }
+            }
+          ]
+        },
+        {
+          "name": "StorefrontService",
+          "args": [
+            {
+              "type": "String",
+              "value": "some name"
+            },
+            {
+              "type": "String",
+              "value": "some description"
             }
           ]
         }
