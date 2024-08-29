@@ -1,15 +1,17 @@
 import "NonFungibleToken"
+import "Burner"
 
-pub contract TenantService: NonFungibleToken {
+access(all) contract TenantService: NonFungibleToken {
+    access(all) entitlement Admin
 
     // basic data about the tenant
-    pub let id: String
-    pub let name: String
-    pub let description: String
-    pub var closed: Bool
+    access(all) let id: String
+    access(all) let name: String
+    access(all) let description: String
+    access(all) var closed: Bool
 
     // NFT
-    pub var totalSupply: UInt64
+    access(all) var totalSupply: UInt64
 
     // paths
     access(all) let ADMIN_OBJECT_PATH: StoragePath
@@ -49,12 +51,12 @@ pub contract TenantService: NonFungibleToken {
     access(self) var faucetSeq: UInt64
 
     // tenant events
-    pub event TenantClosed()
+    access(all) event TenantClosed()
 
     // NFT events
-    pub event ContractInitialized()
-    pub event Withdraw(id: UInt64, from: Address?)
-    pub event Deposit(id: UInt64, to: Address?)
+    access(all) event ContractInitialized()
+    access(all) event Withdraw(id: UInt64, from: Address?)
+    access(all) event Deposit(id: UInt64, to: Address?)
 
     init(
         tenantId: String,
@@ -99,7 +101,7 @@ pub contract TenantService: NonFungibleToken {
         self.totalSupply = 0
 
         self.OBJECT_TYPE_MASK = UInt64.max << 55
-        self.SEQUENCE_MASK = (UInt64.max << UInt64(9)) >> UInt64(9)
+        self.SEQUENCE_MASK = (UInt64.max << 9) >> 9
 
         self.ADMIN_OBJECT_PATH = ADMIN_OBJECT_PATH
         self.PRIVATE_NFT_COLLECTION_PATH = PRIVATE_NFT_COLLECTION_PATH
@@ -107,31 +109,33 @@ pub contract TenantService: NonFungibleToken {
         self.PUBLIC_NFT_COLLECTION_PATH_CUSTOM = PUBLIC_NFT_COLLECTION_PATH_CUSTOM
 
         // create a collection for the admin
-        self.account.save<@ShardedCollection>(<- TenantService.createEmptyShardedCollection(numBuckets: 32), to: TenantService.PRIVATE_NFT_COLLECTION_PATH)
+        self.account.storage.save<@ShardedCollection>(<- TenantService.createEmptyShardedCollection(numBuckets: 32), to: TenantService.PRIVATE_NFT_COLLECTION_PATH)
 
         // Create a public capability for the Collection
-        self.account.link<&{NonFungibleToken.CollectionPublic}>(TenantService.PUBLIC_NFT_COLLECTION_PATH, target: TenantService.PRIVATE_NFT_COLLECTION_PATH)
-        self.account.link<&{CollectionPublic}>(TenantService.PUBLIC_NFT_COLLECTION_PATH_CUSTOM, target: TenantService.PRIVATE_NFT_COLLECTION_PATH)
+        let cap = self.account.capabilities.storage.issue<&{NonFungibleToken.Collection}>(TenantService.PRIVATE_NFT_COLLECTION_PATH)
+        self.account.capabilities.publish(cap, at: TenantService.PUBLIC_NFT_COLLECTION_PATH)
+
+        self.account.capabilities.publish(cap, at: TenantService.PUBLIC_NFT_COLLECTION_PATH_CUSTOM)
 
         // put the admin in storage
-        self.account.save<@TenantAdmin>(<- create TenantAdmin(), to: TenantService.ADMIN_OBJECT_PATH)
+        self.account.storage.save<@TenantAdmin>(<- create TenantAdmin(), to: TenantService.ADMIN_OBJECT_PATH)
 
         emit ContractInitialized()
     }
 
-    pub enum ObjectType: UInt8 {
-        pub case UNKNOWN
+    access(all) enum ObjectType: UInt8 {
+        access(all) case UNKNOWN
 
         // An Archetype is a high level organizational unit for a type of NFT. For instance, in the
         // case that the Tenant is a company dealing with professional sports they might have an Archetype
         // for each of the sports that they support, ie: Basketball, Baseball, Football, etc.
         //
-        pub case ARCHETYPE
+        access(all) case ARCHETYPE
 
         // An Artifact is the actual object that is minted as an NFT. It contains all of the meta data data
         // and a reference to the Archetype that it belongs to.
         //
-        pub case ARTIFACT
+        access(all) case ARTIFACT
 
         // NFTs can be minted into a Set. A set could be something along the lines of "Greatest Pitchers",
         // "Slam Dunk Artists", or "Running Backs" (continuing with the sports theme from above). NFT do
@@ -139,81 +143,81 @@ pub contract TenantService: NonFungibleToken {
         // in another instance as part of a set - so that the NFT references the same Artifact, but only
         // one of them belongs to the Set.
         //
-        pub case SET
+        access(all) case SET
 
         // A Print reserves a block of serial numbers for minting at a later time. It is associated with
         // a single Artifact and when the Print is minted it reserves the next serial number through however
         // many serial numbers are to be reserved. NFTs can then later be minted from the Print and will
         // be given the reserved serial numbers.
         //
-        pub case PRINT
+        access(all) case PRINT
 
         // A Faucet is similar to a Print except that it doesn't reserve a block of serial numbers, it merely
         // mints NFTs from a given Artifact on demand. A Faucet can have a maxMintCount or be unbound and
         // mint infinitely (or however many NFTs are allowed to be minted for the Artifact that it is bound to).
         //
-        pub case FAUCET
+        access(all) case FAUCET
 
         // An NFT holds metadata, a reference to it's Artifact (and therefore Archetype), a reference to
         // it's Set (if it belongs to one), a reference to it's Print (if it was minted by one), a reference
         // to it's Faucet (if it was minted by one) and has a unique serial number.
-        pub case NFT
+        access(all) case NFT
     }
 
-    pub let OBJECT_TYPE_MASK: UInt64
-    pub let SEQUENCE_MASK: UInt64
+    access(all) let OBJECT_TYPE_MASK: UInt64
+    access(all) let SEQUENCE_MASK: UInt64
 
     // Generates an ID for the given object type and sequence. We generate IDs this way
     // so that they are unique across the various types of objects supported by this
     // contract.
     //
-    pub fun generateId(_ objectType: ObjectType, _ sequence: UInt64): UInt64 {
+    access(all) fun generateId(_ objectType: ObjectType, _ sequence: UInt64): UInt64 {
         if (sequence > 36028797018963967) {
             panic("sequence may only have 55 bits and must be less than 36028797018963967")
         }
         var ret: UInt64 = UInt64(objectType.rawValue)
-        ret = ret << UInt64(55)
-        ret = ret | ((sequence << UInt64(9)) >> UInt64(9))
+        ret = ret << 55
+        ret = ret | ((sequence << 9) >> 9)
         return ret
     }
 
     // Extracts the ObjectType from an id
     //
-    pub fun getObjectType(_ id: UInt64): ObjectType {
-        return ObjectType(rawValue: UInt8(id >> UInt64(55)))!
+    access(all) view fun getObjectType(_ id: UInt64): ObjectType {
+        return ObjectType(rawValue: UInt8(id >> 55))!
     }
 
     // Extracts the sequence from an id
     //
-    pub fun getSequence(_ id: UInt64): UInt64 {
+    access(all) fun getSequence(_ id: UInt64): UInt64 {
         return id & TenantService.SEQUENCE_MASK
     }
 
     // Indicates whether or not the given id is for a given ObjectType.
     //
-    pub fun isObjectType(_ id: UInt64, _ objectType: ObjectType): Bool {
+    access(all) view fun isObjectType(_ id: UInt64, _ objectType: ObjectType): Bool {
         return (TenantService.getObjectType(id) == objectType)
     }
 
     // Returns the tenant id that was supplied when the contract was created
     //
-    pub fun getTenantId(): String {
+    access(all) fun getTenantId(): String {
         return self.id
     }
 
     // Returns the version of this contract
     //
-    pub fun getVersion(): UInt32 {
+    access(all) fun getVersion(): UInt32 {
         return 2
     }
 
     // TenantAdmin is used for administering the Tenant
     //
-    pub resource TenantAdmin {
+    access(all) resource TenantAdmin {
 
         // Closes the Tenant, rendering any write access impossible
         //
-        pub fun close() {
+        access(Admin) fun close() {
             if !TenantService.closed {
                 TenantService.closed = true
                 emit TenantClosed()
@@ -222,7 +226,7 @@ pub contract TenantService: NonFungibleToken {
 
         // Creates a new Archetype returning it's id.
         //
-        pub fun createArchetype(
+        access(Admin) fun createArchetype(
             name: String,
             description: String,
             metadata: {String: TenantService.MetadataField}
@@ -238,18 +242,18 @@ pub contract TenantService: NonFungibleToken {
 
         // Grants admin access to the given Archetype
         //
-        pub fun borrowArchetypeAdmin(_ id: UInt64): &ArchetypeAdmin? {
+        access(Admin) view fun borrowArchetypeAdmin(_ id: UInt64): auth(Admin) &ArchetypeAdmin? {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 TenantService.archetypeAdmins[id] != nil: "Archetype not found"
                 TenantService.isObjectType(id, ObjectType.ARCHETYPE): "ObjectType is not an Archetype"
             }
-            return &TenantService.archetypeAdmins[id] as &ArchetypeAdmin?
+            return &TenantService.archetypeAdmins[id]
         }
 
         // Creates a new Artifact returning it's id.
         //
-        pub fun createArtifact(
+        access(Admin) fun createArtifact(
             archetypeId: UInt64,
             name: String,
             description: String,
@@ -270,18 +274,18 @@ pub contract TenantService: NonFungibleToken {
 
         // Grants admin access to the given Artifact
         //
-        pub fun borrowArtifactAdmin(_ id: UInt64): &ArtifactAdmin? {
+        access(Admin) view fun borrowArtifactAdmin(_ id: UInt64): auth(Admin) &ArtifactAdmin? {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 TenantService.artifactAdmins[id] != nil: "Artifact not found"
                 TenantService.isObjectType(id, ObjectType.ARTIFACT): "ObjectType is not an Artifact"
             }
-            return &TenantService.artifactAdmins[id] as &ArtifactAdmin?
+            return &TenantService.artifactAdmins[id]
         }
 
         // Creates a new Set returning it's id.
         //
-        pub fun createSet(name: String, description: String, metadata: {String: TenantService.MetadataField}): UInt64 {
+        access(Admin) fun createSet(name: String, description: String, metadata: {String: TenantService.MetadataField}): UInt64 {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
             }
@@ -293,18 +297,18 @@ pub contract TenantService: NonFungibleToken {
 
         // Grants admin access to the given Set
         //
-        pub fun borrowSetAdmin(_ id: UInt64): &SetAdmin? {
+        access(Admin) view fun borrowSetAdmin(_ id: UInt64): auth(Admin) &SetAdmin? {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 TenantService.setAdmins[id] != nil: "Set not found"
                 TenantService.isObjectType(id, ObjectType.SET): "ObjectType is not a Set"
             }
-            return &TenantService.setAdmins[id] as &SetAdmin?
+            return &TenantService.setAdmins[id]
         }
 
         // Creates a new Print returning it's id.
         //
-        pub fun createPrint(
+        access(Admin) fun createPrint(
            artifactId: UInt64,
            setId: UInt64?,
            name: String,
@@ -325,18 +329,18 @@ pub contract TenantService: NonFungibleToken {
 
         // Grants admin access to the given Print
         //
-        pub fun borrowPrintAdmin(_ id: UInt64): &PrintAdmin? {
+        access(Admin) fun borrowPrintAdmin(_ id: UInt64): auth(Admin) &PrintAdmin? {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 TenantService.printAdmins[id] != nil: "Print not found"
                 TenantService.isObjectType(id, ObjectType.PRINT): "ObjectType is not a print"
             }
-            return &TenantService.printAdmins[id] as &PrintAdmin?
+            return &TenantService.printAdmins[id]
         }
 
         // Creates a new Faucet returning it's id.
         //
-        pub fun createFaucet(
+        access(Admin) fun createFaucet(
            artifactId: UInt64,
            setId: UInt64?,
            name: String,
@@ -357,21 +361,22 @@ pub contract TenantService: NonFungibleToken {
 
         // Grants admin access to the given Faucet
         //
-        pub fun borrowFaucetAdmin(_ id: UInt64): &FaucetAdmin? {
+        access(Admin) fun borrowFaucetAdmin(_ id: UInt64): auth(Admin) &FaucetAdmin? {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 TenantService.faucetAdmins[id] != nil: "Faucet not found"
                 TenantService.isObjectType(id, ObjectType.FAUCET): "ObjectType is not a faucet"
             }
-            return &TenantService.faucetAdmins[id] as &FaucetAdmin?
+            return &TenantService.faucetAdmins[id]
         }
 
         // Mints an NFT
         //
-        pub fun mintNFT(artifactId: UInt64, printId: UInt64?, faucetId: UInt64?, setId: UInt64?, metadata: {String: TenantService.MetadataField}): @NFT {
+        access(Admin) fun mintNFT(artifactId: UInt64, printId: UInt64?, faucetId: UInt64?, setId: UInt64?, metadata: {String: TenantService.MetadataField}): @NFT {
+            // TODO: Fix or move broken pre-conditions
             pre {
                 TenantService.artifacts[artifactId] != nil: "Cannot mint the NFT: The Artifact wasn't found"
-                self.borrowArtifactAdmin(artifactId)?.closed != true: "The Artifact is closed"
+                // self.borrowArtifactAdmin(artifactId)?.closed != true: "The Artifact is closed"
 
                 printId == nil || TenantService.isObjectType(printId!, ObjectType.PRINT): "Id supplied for printId is not an ObjectType of print"
                 faucetId == nil || TenantService.isObjectType(faucetId!, ObjectType.FAUCET): "Id supplied for faucetId is not an ObjectType of faucet"
@@ -381,15 +386,15 @@ pub contract TenantService: NonFungibleToken {
                 faucetId == nil || TenantService.faucets[faucetId!] != nil: "Cannot mint the NFT: The Faucet wasn't found"
                 setId == nil || TenantService.sets[setId!] != nil: "Cannot mint the NFT: The Set wasn't found"
 
-                printId == nil || self.borrowPrintAdmin(printId!)?.closed != true: "The Print is closed"
-                faucetId == nil || self.borrowFaucetAdmin(faucetId!)?.closed != true: "The Faucet is closed"
-                setId == nil || self.borrowSetAdmin(setId!)?.closed != true: "The Set is closed"
+                // printId == nil || self.borrowPrintAdmin(printId!)?.closed != true: "The Print is closed"
+                // faucetId == nil || self.borrowFaucetAdmin(faucetId!)?.closed != true: "The Faucet is closed"
+                // setId == nil || self.borrowSetAdmin(setId!)?.closed != true: "The Set is closed"
 
-                faucetId == nil || TenantService.faucets[faucetId!]!.artifactId == artifactId: "The artifactId doesn't match the Faucet's artifactId"
-                printId == nil || TenantService.prints[printId!]!.artifactId == artifactId: "The artifactId doesn't match the Print's artifactId"
+                // faucetId == nil || TenantService.faucets[faucetId!]!.artifactId == artifactId: "The artifactId doesn't match the Faucet's artifactId"
+                // printId == nil || TenantService.prints[printId!]!.artifactId == artifactId: "The artifactId doesn't match the Print's artifactId"
 
-                faucetId == nil || TenantService.faucets[faucetId!]!.setId == setId: "The setId doesn't match the Faucet's setId"
-                printId == nil || TenantService.prints[printId!]!.setId == setId: "The setId doesn't match the Print's setId"
+                // faucetId == nil || TenantService.faucets[faucetId!]!.setId == setId: "The setId doesn't match the Faucet's setId"
+                // printId == nil || TenantService.prints[printId!]!.setId == setId: "The setId doesn't match the Print's setId"
 
                 !(faucetId != nil && printId != nil): "Can only mint from one of a faucet or print"
             }
@@ -441,7 +446,7 @@ pub contract TenantService: NonFungibleToken {
 
         // Mints many NFTs
         //
-        pub fun batchMintNFTs(
+        access(Admin) fun batchMintNFTs(
             count: UInt64,
             artifactId: UInt64,
             printId: UInt64?,
@@ -459,7 +464,7 @@ pub contract TenantService: NonFungibleToken {
                     setId: setId,
                     metadata: metadata
                 ))
-                i = i + (1 as UInt64)
+                i = i + 1
             }
             return <- newCollection
         }
@@ -467,7 +472,7 @@ pub contract TenantService: NonFungibleToken {
         // Creates a new TenantAdmin that allows for another account
         // to administer the Tenant
         //
-        pub fun createNewTenantAdmin(): @TenantAdmin {
+        access(Admin) fun createNewTenantAdmin(): @TenantAdmin {
             return <- create TenantAdmin()
         }
     }
@@ -476,18 +481,18 @@ pub contract TenantService: NonFungibleToken {
     // Archetype
     // =====================================
 
-    pub event ArchetypeCreated(_ id: UInt64)
-    pub event ArchetypeDestroyed(_ id: UInt64)
-    pub event ArchetypeClosed(_ id: UInt64)
+    access(all) event ArchetypeCreated(_ id: UInt64)
+    access(all) event ArchetypeDestroyed(_ id: UInt64)
+    access(all) event ArchetypeClosed(_ id: UInt64)
 
-    pub fun getArchetype(_ id: UInt64): Archetype? {
+    access(all) fun getArchetype(_ id: UInt64): Archetype? {
         pre {
             TenantService.isObjectType(id, ObjectType.ARCHETYPE): "Id supplied is not for an archetype"
         }
         return TenantService.archetypes[id]
     }
 
-    pub fun getArchetypeView(_ id: UInt64): ArchetypeView? {
+    access(all) fun getArchetypeView(_ id: UInt64): ArchetypeView? {
         pre {
             TenantService.isObjectType(id, ObjectType.ARCHETYPE): "Id supplied is not for an archetype"
         }
@@ -507,7 +512,7 @@ pub contract TenantService: NonFungibleToken {
         )
     }
 
-    pub fun getArchetypeViews(_ archetypes: [UInt64]): [ArchetypeView] {
+    access(all) fun getArchetypeViews(_ archetypes: [UInt64]): [ArchetypeView] {
         let ret: [ArchetypeView] = []
         for archetype in archetypes {
             let element = self.getArchetypeView(archetype)
@@ -518,36 +523,37 @@ pub contract TenantService: NonFungibleToken {
         return ret
     }
 
-    pub fun getAllArchetypes(): [Archetype] {
+    access(all) fun getAllArchetypes(): [Archetype] {
         return TenantService.archetypes.values
     }
 
     // The immutable data for an Archetype
     //
-    pub struct Archetype {
-        pub let id: UInt64
-        pub let name: String
-        pub let description: String
-        pub let metadata: {String: TenantService.MetadataField}
+    access(all) struct Archetype {
+        access(all) let id: UInt64
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let metadata: {String: TenantService.MetadataField}
 
         init(name: String, description: String, metadata: {String: TenantService.MetadataField}) {
             self.id = TenantService.generateId(ObjectType.ARCHETYPE, TenantService.archetypeSeq)
             self.name = name
             self.description = description
             self.metadata = metadata
-            TenantService.archetypeSeq = TenantService.archetypeSeq + 1 as UInt64
+            TenantService.archetypeSeq = TenantService.archetypeSeq + 1
             emit ArchetypeCreated(self.id)
         }
     }
 
     // The mutable data for an Archetype
     //
-    pub resource ArchetypeAdmin {
+    access(all) resource ArchetypeAdmin {
+        access(all) event ResourceDestroyed(id: UInt64 = self.uuid)
 
-        pub let id: UInt64
-        pub var mintCount: UInt64
-        pub var printCount: UInt64
-        pub var closed: Bool
+        access(all) let id: UInt64
+        access(all) var mintCount: UInt64
+        access(all) var printCount: UInt64
+        access(all) var closed: Bool
 
         init(_ id: UInt64) {
             self.id = id
@@ -556,14 +562,14 @@ pub contract TenantService: NonFungibleToken {
             self.closed = false
         }
 
-        pub fun close() {
+        access(Admin) fun close() {
             if !self.closed {
                 self.closed = true
                 emit ArchetypeClosed(self.id)
             }
         }
 
-        pub fun logMint(_ count: UInt64) {
+        access(Admin) fun logMint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Archetype is closed"
@@ -571,29 +577,25 @@ pub contract TenantService: NonFungibleToken {
             self.mintCount = self.mintCount + count
         }
 
-        pub fun logPrint(_ count: UInt64) {
+        access(Admin) fun logPrint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Archetype is closed"
             }
             self.printCount = self.printCount + count
         }
-
-        destroy() {
-            emit ArchetypeDestroyed(self.id)
-        }
     }
 
     // An immutable view for an Archetype and all of it's data
     //
-    pub struct ArchetypeView {
-        pub let id: UInt64
-        pub let name: String
-        pub let description: String
-        pub let metadata: {String: TenantService.MetadataField}
-        pub let mintCount: UInt64
-        pub let printCount: UInt64
-        pub let closed: Bool
+    access(all) struct ArchetypeView {
+        access(all) let id: UInt64
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let metadata: {String: TenantService.MetadataField}
+        access(all) let mintCount: UInt64
+        access(all) let printCount: UInt64
+        access(all) let closed: Bool
 
         init(
             id: UInt64,
@@ -618,19 +620,19 @@ pub contract TenantService: NonFungibleToken {
     // Artifact
     // =====================================
 
-    pub event ArtifactCreated(_ id: UInt64)
-    pub event ArtifactMaxMintCountChanged(_ id: UInt64, _ oldMaxMintCount: UInt64, _ newMaxMintCount: UInt64)
-    pub event ArtifactDestroyed(_ id: UInt64)
-    pub event ArtifactClosed(_ id: UInt64)
+    access(all) event ArtifactCreated(_ id: UInt64)
+    access(all) event ArtifactMaxMintCountChanged(_ id: UInt64, _ oldMaxMintCount: UInt64, _ newMaxMintCount: UInt64)
+    access(all) event ArtifactDestroyed(_ id: UInt64)
+    access(all) event ArtifactClosed(_ id: UInt64)
 
-    pub fun getArtifact(_ id: UInt64): Artifact? {
+    access(all) fun getArtifact(_ id: UInt64): Artifact? {
         pre {
             TenantService.isObjectType(id, ObjectType.ARTIFACT): "Id supplied is not for an artifact"
         }
         return TenantService.artifacts[id]
     }
 
-    pub fun getArtifactView(_ id: UInt64): ArtifactView? {
+    access(all) fun getArtifactView(_ id: UInt64): ArtifactView? {
         pre {
             TenantService.isObjectType(id, ObjectType.ARTIFACT): "Id supplied is not for an artifact"
         }
@@ -652,7 +654,7 @@ pub contract TenantService: NonFungibleToken {
         )
     }
 
-    pub fun getArtifactViews(_ artifacts: [UInt64]): [ArtifactView] {
+    access(all) fun getArtifactViews(_ artifacts: [UInt64]): [ArtifactView] {
         let ret: [ArtifactView] = []
         for artifact in artifacts {
             let element = self.getArtifactView(artifact)
@@ -663,11 +665,11 @@ pub contract TenantService: NonFungibleToken {
         return ret
     }
 
-    pub fun getAllArtifacts(): [Artifact] {
+    access(all) fun getAllArtifacts(): [Artifact] {
         return TenantService.artifacts.values
     }
 
-    pub fun getArtifactsBySet(_ setId: UInt64): [UInt64] {
+    access(all) fun getArtifactsBySet(_ setId: UInt64): [UInt64] {
         let map = TenantService.artifactsBySet[setId]
         if map != nil {
             return map!.keys
@@ -675,7 +677,7 @@ pub contract TenantService: NonFungibleToken {
         return []
     }
 
-    pub fun getFaucetsBySet(_ setId: UInt64): [UInt64] {
+    access(all) fun getFaucetsBySet(_ setId: UInt64): [UInt64] {
         let map = TenantService.faucetsBySet[setId]
         if map != nil {
             return map!.keys
@@ -683,7 +685,7 @@ pub contract TenantService: NonFungibleToken {
         return []
     }
 
-    pub fun getSetsByArtifact(_ artifactId: UInt64): [UInt64] {
+    access(all) fun getSetsByArtifact(_ artifactId: UInt64): [UInt64] {
         let map = TenantService.setsByArtifact[artifactId]
         if map != nil {
             return map!.keys
@@ -691,7 +693,7 @@ pub contract TenantService: NonFungibleToken {
         return []
     }
 
-    pub fun getFaucetsByArtifact(_ artifactId: UInt64): [UInt64] {
+    access(all) fun getFaucetsByArtifact(_ artifactId: UInt64): [UInt64] {
         let map = TenantService.faucetsByArtifact[artifactId]
         if map != nil {
             return map!.keys
@@ -699,7 +701,7 @@ pub contract TenantService: NonFungibleToken {
         return []
     }
 
-    pub fun getArtifactsByArchetype(_ archetypeId: UInt64): [UInt64] {
+    access(all) fun getArtifactsByArchetype(_ archetypeId: UInt64): [UInt64] {
         let map = TenantService.artifactsByArchetype[archetypeId]
         if map != nil {
             return map!.keys
@@ -709,13 +711,13 @@ pub contract TenantService: NonFungibleToken {
 
     // The immutable data for an Artifact
     //
-    pub struct Artifact {
-        pub let id: UInt64
-        pub let archetypeId: UInt64
-        pub let name: String
-        pub let description: String
-        pub let maxMintCount: UInt64
-        pub let metadata: {String: TenantService.MetadataField}
+    access(all) struct Artifact {
+        access(all) let id: UInt64
+        access(all) let archetypeId: UInt64
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let maxMintCount: UInt64
+        access(all) let metadata: {String: TenantService.MetadataField}
 
         init(archetypeId: UInt64, name: String, description: String, maxMintCount: UInt64, metadata: {String: TenantService.MetadataField}) {
             self.id = TenantService.generateId(ObjectType.ARTIFACT, TenantService.artifactSeq)
@@ -724,19 +726,20 @@ pub contract TenantService: NonFungibleToken {
             self.description = description
             self.maxMintCount = maxMintCount
             self.metadata = metadata
-            TenantService.artifactSeq = TenantService.artifactSeq + 1 as UInt64
+            TenantService.artifactSeq = TenantService.artifactSeq + 1
             emit ArtifactCreated(self.id)
         }
     }
 
     // The mutable data for an Artifact
     //
-    pub resource ArtifactAdmin {
+    access(all) resource ArtifactAdmin {
+        access(all) event ResourceDestroyed(id: UInt64 = self.uuid)
 
-        pub let id: UInt64
-        pub var mintCount: UInt64
-        pub var printCount: UInt64
-        pub var closed: Bool
+        access(all) let id: UInt64
+        access(all) var mintCount: UInt64
+        access(all) var printCount: UInt64
+        access(all) var closed: Bool
 
         init(id: UInt64) {
             self.id = id
@@ -745,48 +748,44 @@ pub contract TenantService: NonFungibleToken {
             self.closed = false
         }
 
-        pub fun close() {
+        access(Admin) fun close() {
             if !self.closed {
                 self.closed = true
                 emit ArtifactClosed(self.id)
             }
         }
 
-        pub fun logMint(_ count: UInt64) {
+        access(Admin) fun logMint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Artifact is closed"
-                ((TenantService.artifacts[self.id]!.maxMintCount == (0 as UInt64))
+                ((TenantService.artifacts[self.id]!.maxMintCount == 0)
                     || (TenantService.artifacts[self.id]!.maxMintCount >= (self.mintCount + count))): "The Artifact would exceed it's maxMintCount"
             }
             self.mintCount = self.mintCount + count
         }
 
-        pub fun logPrint(_ count: UInt64) {
+        access(Admin) fun logPrint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Artifact is closed"
             }
             self.printCount = self.printCount + count
         }
-
-        destroy() {
-            emit ArtifactDestroyed(self.id)
-        }
     }
 
     // An immutable view for an Artifact and all of it's data
     //
-    pub struct ArtifactView {
-        pub let id: UInt64
-        pub let archetypeId: UInt64
-        pub let name: String
-        pub let description: String
-        pub let metadata: {String: TenantService.MetadataField}
-        pub let maxMintCount: UInt64
-        pub let mintCount: UInt64
-        pub let printCount: UInt64
-        pub let closed: Bool
+    access(all) struct ArtifactView {
+        access(all) let id: UInt64
+        access(all) let archetypeId: UInt64
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let metadata: {String: TenantService.MetadataField}
+        access(all) let maxMintCount: UInt64
+        access(all) let mintCount: UInt64
+        access(all) let printCount: UInt64
+        access(all) let closed: Bool
 
         init(
             id: UInt64,
@@ -815,18 +814,18 @@ pub contract TenantService: NonFungibleToken {
     // Set
     // =====================================
 
-    pub event SetCreated(_ id: UInt64)
-    pub event SetDestroyed(_ id: UInt64)
-    pub event SetClosed(_ id: UInt64)
+    access(all) event SetCreated(_ id: UInt64)
+    access(all) event SetDestroyed(_ id: UInt64)
+    access(all) event SetClosed(_ id: UInt64)
 
-    pub fun getSet(_ id: UInt64): Set? {
+    access(all) fun getSet(_ id: UInt64): Set? {
         pre {
             TenantService.isObjectType(id, ObjectType.SET): "Id supplied is not for an set"
         }
         return TenantService.sets[id]
     }
 
-    pub fun getSetView(_ id: UInt64): SetView? {
+    access(all) fun getSetView(_ id: UInt64): SetView? {
         pre {
             TenantService.isObjectType(id, ObjectType.SET): "Id supplied is not for an set"
         }
@@ -846,7 +845,7 @@ pub contract TenantService: NonFungibleToken {
         )
     }
 
-    pub fun getSetViews(_ sets: [UInt64]): [SetView] {
+    access(all) fun getSetViews(_ sets: [UInt64]): [SetView] {
         let ret: [SetView] = []
         for set in sets {
             let element = self.getSetView(set)
@@ -857,17 +856,17 @@ pub contract TenantService: NonFungibleToken {
         return ret
     }
 
-    pub fun getAllSets(): [Set] {
+    access(all) fun getAllSets(): [Set] {
         return TenantService.sets.values
     }
 
     // The immutable data for an Set
     //
-    pub struct Set {
-        pub let id: UInt64
-        pub let name: String
-        pub let description: String
-        pub let metadata: {String: TenantService.MetadataField}
+    access(all) struct Set {
+        access(all) let id: UInt64
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let metadata: {String: TenantService.MetadataField}
 
         init(
             name: String,
@@ -878,7 +877,7 @@ pub contract TenantService: NonFungibleToken {
             self.name = name
             self.description = description
             self.metadata = metadata
-            TenantService.setSeq = TenantService.setSeq + 1 as UInt64
+            TenantService.setSeq = TenantService.setSeq + 1
             TenantService.faucetsBySet[self.id] = {}
             emit SetCreated(self.id)
         }
@@ -886,11 +885,13 @@ pub contract TenantService: NonFungibleToken {
 
     // The mutable data for an Set
     //
-    pub resource SetAdmin {
-        pub let id: UInt64
-        pub var mintCount: UInt64
-        pub var printCount: UInt64
-        pub var closed: Bool
+    access(all) resource SetAdmin {
+        access(all) event ResourceDestroyed(id: UInt64 = self.uuid)
+
+        access(all) let id: UInt64
+        access(all) var mintCount: UInt64
+        access(all) var printCount: UInt64
+        access(all) var closed: Bool
 
         init(_ id: UInt64) {
             self.id = id
@@ -899,14 +900,14 @@ pub contract TenantService: NonFungibleToken {
             self.closed = false
         }
 
-        pub fun close() {
+        access(Admin) fun close() {
             if !self.closed {
                 self.closed = true
                 emit SetClosed(self.id)
             }
         }
 
-        pub fun logMint(_ count: UInt64) {
+        access(Admin) fun logMint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Set is closed"
@@ -914,29 +915,25 @@ pub contract TenantService: NonFungibleToken {
             self.mintCount = self.mintCount + count
         }
 
-        pub fun logPrint(_ count: UInt64) {
+        access(Admin) fun logPrint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Set is closed"
             }
             self.printCount = self.printCount + count
         }
-
-        destroy() {
-            emit SetDestroyed(self.id)
-        }
     }
 
     // An immutable view for an Set and all of it's data
     //
-    pub struct SetView {
-        pub let id: UInt64
-        pub let name: String
-        pub let description: String
-        pub let metadata: {String: TenantService.MetadataField}
-        pub let mintCount: UInt64
-        pub let printCount: UInt64
-        pub let closed: Bool
+    access(all) struct SetView {
+        access(all) let id: UInt64
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let metadata: {String: TenantService.MetadataField}
+        access(all) let mintCount: UInt64
+        access(all) let printCount: UInt64
+        access(all) let closed: Bool
 
         init(
             id: UInt64,
@@ -961,18 +958,18 @@ pub contract TenantService: NonFungibleToken {
     // Print
     // =====================================
 
-    pub event PrintCreated(_ id: UInt64)
-    pub event PrintDestroyed(_ id: UInt64)
-    pub event PrintClosed(_ id: UInt64)
+    access(all) event PrintCreated(_ id: UInt64)
+    access(all) event PrintDestroyed(_ id: UInt64)
+    access(all) event PrintClosed(_ id: UInt64)
 
-    pub fun getPrint(_ id: UInt64): Print? {
+    access(all) fun getPrint(_ id: UInt64): Print? {
         pre {
             TenantService.isObjectType(id, ObjectType.PRINT): "Id supplied is not for a print"
         }
         return TenantService.prints[id]
     }
 
-    pub fun getPrintView(_ id: UInt64): PrintView? {
+    access(all) fun getPrintView(_ id: UInt64): PrintView? {
         pre {
             TenantService.isObjectType(id, ObjectType.PRINT): "Id supplied is not for a print"
         }
@@ -996,7 +993,7 @@ pub contract TenantService: NonFungibleToken {
         )
     }
 
-    pub fun getPrintViews(_ prints: [UInt64]): [PrintView] {
+    access(all) fun getPrintViews(_ prints: [UInt64]): [PrintView] {
         let ret: [PrintView] = []
         for print in prints {
             let element = self.getPrintView(print)
@@ -1007,21 +1004,21 @@ pub contract TenantService: NonFungibleToken {
         return ret
     }
 
-    pub fun getAllPrints(): [Print] {
+    access(all) fun getAllPrints(): [Print] {
         return TenantService.prints.values
     }
 
     // The immutable data for an Print
     //
-    pub struct Print {
-        pub let id: UInt64
-        pub let artifactId: UInt64
-        pub let setId: UInt64?
-        pub let name: String
-        pub let description: String
-        pub let maxMintCount: UInt64
-        pub let metadata: {String: TenantService.MetadataField}
-        pub let serialNumberStart: UInt64
+    access(all) struct Print {
+        access(all) let id: UInt64
+        access(all) let artifactId: UInt64
+        access(all) let setId: UInt64?
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let maxMintCount: UInt64
+        access(all) let metadata: {String: TenantService.MetadataField}
+        access(all) let serialNumberStart: UInt64
 
         init(
             artifactId: UInt64,
@@ -1043,19 +1040,20 @@ pub contract TenantService: NonFungibleToken {
             self.metadata = metadata
             self.serialNumberStart = TenantService.nextNftSerialNumber[artifactId]!
             TenantService.nextNftSerialNumber[artifactId] = self.serialNumberStart + maxMintCount
-            TenantService.printSeq = TenantService.printSeq + 1 as UInt64
+            TenantService.printSeq = TenantService.printSeq + 1
             emit PrintCreated(self.id)
         }
     }
 
     // The mutable data for an Print
     //
-    pub resource PrintAdmin {
+    access(all) resource PrintAdmin {
+        access(all) event ResourceDestroyed(id: UInt64 = self.uuid)
 
-        pub let id: UInt64
-        pub var nextNftSerialNumber: UInt64
-        pub var mintCount: UInt64
-        pub var closed: Bool
+        access(all) let id: UInt64
+        access(all) var nextNftSerialNumber: UInt64
+        access(all) var mintCount: UInt64
+        access(all) var closed: Bool
 
         init(_ id: UInt64, _ serialNumberStart: UInt64) {
             self.id = id
@@ -1064,20 +1062,20 @@ pub contract TenantService: NonFungibleToken {
             self.nextNftSerialNumber = serialNumberStart
         }
 
-        pub fun close() {
+        access(Admin) fun close() {
             if !self.closed {
                 self.closed = true
                 emit PrintClosed(self.id)
             }
         }
 
-        pub fun getAndIncrementSerialNumber(): UInt64 {
+        access(Admin) fun getAndIncrementSerialNumber(): UInt64 {
             let ret: UInt64 = self.nextNftSerialNumber
-            self.nextNftSerialNumber = ret + (1 as UInt64)
+            self.nextNftSerialNumber = ret + 1
             return ret
         }
 
-        pub fun logMint(_ count: UInt64) {
+        access(Admin) fun logMint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Print is closed"
@@ -1085,26 +1083,22 @@ pub contract TenantService: NonFungibleToken {
             }
             self.mintCount = self.mintCount + count
         }
-
-        destroy() {
-            emit PrintDestroyed(self.id)
-        }
     }
 
     // An immutable view for an Print and all of it's data
     //
-    pub struct PrintView {
-        pub let id: UInt64
-        pub let artifactId: UInt64
-        pub let setId: UInt64?
-        pub let name: String
-        pub let description: String
-        pub let maxMintCount: UInt64
-        pub let metadata: {String: TenantService.MetadataField}
-        pub let serialNumberStart: UInt64
-        pub let nextNftSerialNumber: UInt64
-        pub let mintCount: UInt64
-        pub let closed: Bool
+    access(all) struct PrintView {
+        access(all) let id: UInt64
+        access(all) let artifactId: UInt64
+        access(all) let setId: UInt64?
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let maxMintCount: UInt64
+        access(all) let metadata: {String: TenantService.MetadataField}
+        access(all) let serialNumberStart: UInt64
+        access(all) let nextNftSerialNumber: UInt64
+        access(all) let mintCount: UInt64
+        access(all) let closed: Bool
 
         init(
             id: UInt64,
@@ -1137,19 +1131,19 @@ pub contract TenantService: NonFungibleToken {
     // Faucet
     // =====================================
 
-    pub event FaucetCreated(_ id: UInt64)
-    pub event FaucetMaxMintCountChanged(_ id: UInt64, _ oldMaxMintCount: UInt64, _ newMaxMintCount: UInt64)
-    pub event FaucetDestroyed(_ id: UInt64)
-    pub event FaucetClosed(_ id: UInt64)
+    access(all) event FaucetCreated(_ id: UInt64)
+    access(all) event FaucetMaxMintCountChanged(_ id: UInt64, _ oldMaxMintCount: UInt64, _ newMaxMintCount: UInt64)
+    access(all) event FaucetDestroyed(_ id: UInt64)
+    access(all) event FaucetClosed(_ id: UInt64)
 
-    pub fun getFaucet(_ id: UInt64): Faucet? {
+    access(all) fun getFaucet(_ id: UInt64): Faucet? {
         pre {
             TenantService.isObjectType(id, ObjectType.FAUCET): "Id supplied is not for a faucet"
         }
         return TenantService.faucets[id]
     }
 
-    pub fun getFaucetView(_ id: UInt64): FaucetView? {
+    access(all) fun getFaucetView(_ id: UInt64): FaucetView? {
         pre {
             TenantService.isObjectType(id, ObjectType.FAUCET): "Id supplied is not for a faucet"
         }
@@ -1171,7 +1165,7 @@ pub contract TenantService: NonFungibleToken {
         )
     }
 
-    pub fun getFaucetViews(_ faucets: [UInt64]): [FaucetView] {
+    access(all) fun getFaucetViews(_ faucets: [UInt64]): [FaucetView] {
         let ret: [FaucetView] = []
         for faucet in faucets {
             let element = self.getFaucetView(faucet)
@@ -1182,20 +1176,20 @@ pub contract TenantService: NonFungibleToken {
         return ret
     }
 
-    pub fun getAllFaucets(): [Faucet] {
+    access(all) fun getAllFaucets(): [Faucet] {
         return TenantService.faucets.values
     }
 
     // The immutable data for an Faucet
     //
-    pub struct Faucet {
-        pub let id: UInt64
-        pub let artifactId: UInt64
-        pub let setId: UInt64?
-        pub let name: String
-        pub let description: String
-        pub let maxMintCount: UInt64
-        pub let metadata: {String: TenantService.MetadataField}
+    access(all) struct Faucet {
+        access(all) let id: UInt64
+        access(all) let artifactId: UInt64
+        access(all) let setId: UInt64?
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let maxMintCount: UInt64
+        access(all) let metadata: {String: TenantService.MetadataField}
 
         init(
             artifactId: UInt64,
@@ -1212,7 +1206,7 @@ pub contract TenantService: NonFungibleToken {
             self.description = description
             self.maxMintCount = maxMintCount
             self.metadata = metadata
-            TenantService.faucetSeq = TenantService.faucetSeq + 1 as UInt64
+            TenantService.faucetSeq = TenantService.faucetSeq + 1
 
             if self.setId != nil {
                 let faucetsBySet = TenantService.faucetsBySet[self.setId!]!
@@ -1225,11 +1219,12 @@ pub contract TenantService: NonFungibleToken {
 
     // The mutable data for an Faucet
     //
-    pub resource FaucetAdmin {
+    access(all) resource FaucetAdmin {
+        access(all) event ResourceDestroyed(id: UInt64 = self.uuid)
 
-        pub let id: UInt64
-        pub var mintCount: UInt64
-        pub var closed: Bool
+        access(all) let id: UInt64
+        access(all) var mintCount: UInt64
+        access(all) var closed: Bool
 
         init(id: UInt64) {
             self.id = id
@@ -1237,40 +1232,36 @@ pub contract TenantService: NonFungibleToken {
             self.closed = false
         }
 
-        pub fun close() {
+        access(Admin) fun close() {
             if !self.closed {
                 self.closed = true
                 emit FaucetClosed(self.id)
             }
         }
 
-        pub fun logMint(_ count: UInt64) {
+        access(Admin) fun logMint(_ count: UInt64) {
             pre {
                 TenantService.closed != true: "The Tenant is closed"
                 self.closed != true: "The Faucet is closed"
-                ((TenantService.faucets[self.id]!.maxMintCount == (0 as UInt64))
+                ((TenantService.faucets[self.id]!.maxMintCount == 0)
                     || (TenantService.faucets[self.id]!.maxMintCount >= (self.mintCount + count))): "The Faucet would exceed it's maxMintCount"
             }
             self.mintCount = self.mintCount + count
-        }
-
-        destroy() {
-            emit FaucetDestroyed(self.id)
         }
     }
 
     // An immutable view for an Faucet and all of it's data
     //
-    pub struct FaucetView {
-        pub let id: UInt64
-        pub let artifactId: UInt64
-        pub let setId: UInt64?
-        pub let name: String
-        pub let description: String
-        pub let maxMintCount: UInt64
-        pub let metadata: {String: TenantService.MetadataField}
-        pub let mintCount: UInt64
-        pub let closed: Bool
+    access(all) struct FaucetView {
+        access(all) let id: UInt64
+        access(all) let artifactId: UInt64
+        access(all) let setId: UInt64?
+        access(all) let name: String
+        access(all) let description: String
+        access(all) let maxMintCount: UInt64
+        access(all) let metadata: {String: TenantService.MetadataField}
+        access(all) let mintCount: UInt64
+        access(all) let closed: Bool
 
         init(
             id: UInt64,
@@ -1299,10 +1290,10 @@ pub contract TenantService: NonFungibleToken {
     // NFT
     // =====================================
 
-    pub event NFTCreated(_ id: UInt64)
-    pub event NFTDestroyed(_ id: UInt64)
+    access(all) event NFTCreated(_ id: UInt64)
+    access(all) event NFTDestroyed(_ id: UInt64)
 
-    pub fun getNFTView(_ nft: &NFT): NFTView {
+    access(all) fun getNFTView(_ nft: &NFT): NFTView {
         let archetype = self.getArchetypeView(nft.archetypeId)!
         let artifact = self.getArtifactView(nft.artifactId)!
 
@@ -1333,7 +1324,7 @@ pub contract TenantService: NonFungibleToken {
         )
     }
 
-    pub fun getNFTViews(_ nfts: [&NFT]): [NFTView] {
+    access(all) fun getNFTViews(_ nfts: [&NFT]): [NFTView] {
         let ret: [NFTView] = []
         for nft in nfts {
             ret.append(self.getNFTView(nft))
@@ -1343,14 +1334,16 @@ pub contract TenantService: NonFungibleToken {
 
     // The immutable data for an NFT, this is the actual NFT
     //
-    pub resource NFT: NonFungibleToken.INFT {
-        pub let id: UInt64
-        pub let archetypeId: UInt64
-        pub let artifactId: UInt64
-        pub let printId: UInt64?
-        pub let faucetId: UInt64?
-        pub let setId: UInt64?
-        pub let serialNumber: UInt64
+    access(all) resource NFT: NonFungibleToken.NFT {
+        access(all) event ResourceDestroyed(id: UInt64 = self.id)
+
+        access(all) let id: UInt64
+        access(all) let archetypeId: UInt64
+        access(all) let artifactId: UInt64
+        access(all) let printId: UInt64?
+        access(all) let faucetId: UInt64?
+        access(all) let setId: UInt64?
+        access(all) let serialNumber: UInt64
         access(self) let metadata: {String: TenantService.MetadataField}
 
         init(
@@ -1370,16 +1363,16 @@ pub contract TenantService: NonFungibleToken {
             self.metadata = metadata
 
             if self.printId != nil {
-                let printAdmin = (&TenantService.printAdmins[self.printId!!] as &PrintAdmin?)!
+                let printAdmin = (&TenantService.printAdmins[self.printId!] as auth(Admin) &PrintAdmin?)!
                 self.serialNumber = printAdmin.getAndIncrementSerialNumber()
 
             } else {
                 self.serialNumber = TenantService.nextNftSerialNumber[self.artifactId]!
-                TenantService.nextNftSerialNumber[self.artifactId] = self.serialNumber + (1 as UInt64)
+                TenantService.nextNftSerialNumber[self.artifactId] = self.serialNumber + 1
 
             }
 
-            TenantService.totalSupply = TenantService.totalSupply + (1 as UInt64)
+            TenantService.totalSupply = TenantService.totalSupply + 1
 
             if self.setId != nil {
                 if TenantService.setsByArtifact[self.artifactId] == nil {
@@ -1412,26 +1405,34 @@ pub contract TenantService: NonFungibleToken {
             emit NFTCreated(self.id)
         }
 
-        pub fun getMetadata(): {String: TenantService.MetadataField} {
+        access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
+            return <- create Collection()
+        }
+
+        access(all) fun getMetadata(): {String: TenantService.MetadataField} {
             return self.metadata
         }
 
-        destroy() {
-            emit NFTDestroyed(self.id)
+        access(all) view fun getViews(): [Type] {
+            return []
+        }
+
+        access(all) fun resolveView(_ view: Type): AnyStruct? {
+            return nil
         }
     }
 
     // An immutable view for an NFT and all of it's data
     //
-    pub struct NFTView {
-        pub let id: UInt64
-        pub let archetype: ArchetypeView
-        pub let artifact: ArtifactView
-        pub let print: PrintView?
-        pub let faucet: FaucetView?
-        pub let set: SetView?
-        pub let serialNumber: UInt64
-        pub let metadata: {String: TenantService.MetadataField}
+    access(all) struct NFTView {
+        access(all) let id: UInt64
+        access(all) let archetype: ArchetypeView
+        access(all) let artifact: ArtifactView
+        access(all) let print: PrintView?
+        access(all) let faucet: FaucetView?
+        access(all) let set: SetView?
+        access(all) let serialNumber: UInt64
+        access(all) let metadata: {String: TenantService.MetadataField}
 
         init(
             id: UInt64,
@@ -1457,40 +1458,46 @@ pub contract TenantService: NonFungibleToken {
     // The public version of the collection that accounts can use
     // to deposit NFTs into other accounts
     //
-    pub resource interface CollectionPublic {
-        pub fun deposit(token: @NonFungibleToken.NFT)
-        pub fun batchDeposit(tokens: @NonFungibleToken.Collection)
-        pub fun getIDs(): [UInt64]
-        pub fun borrowNFT(id: UInt64): &NonFungibleToken.NFT
-        pub fun borrowNFTData(id: UInt64): &TenantService.NFT?
-        pub fun borrowNFTDatas(ids: [UInt64]): [&TenantService.NFT]
+    access(all) resource interface CollectionPublic {
+        access(all) fun deposit(token: @{NonFungibleToken.NFT})
+        access(all) fun batchDeposit(tokens: @{NonFungibleToken.Collection})
+        access(all) fun borrowNFTData(id: UInt64): &TenantService.NFT?
+        access(all) fun borrowNFTDatas(ids: [UInt64]): [&TenantService.NFT]
     }
 
     // The collection where NFTs are stored
     //
-    pub resource Collection: CollectionPublic, NonFungibleToken.Provider, NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic {
-        pub var ownedNFTs: @{UInt64: NonFungibleToken.NFT}
+    access(all) resource Collection: CollectionPublic, NonFungibleToken.Collection {
+        access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
 
         init() {
             self.ownedNFTs <- {}
         }
 
-        pub fun withdraw(withdrawID: UInt64): @NonFungibleToken.NFT {
+        access(all) view fun getSupportedNFTTypes(): {Type: Bool} {
+            return {Type<@NFT>(): true}
+        }
+
+        access(all) view fun isSupportedNFTType(type: Type): Bool {
+            return type == Type<@NFT>()
+        }
+
+        access(NonFungibleToken.Withdraw) fun withdraw(withdrawID: UInt64): @{NonFungibleToken.NFT} {
             let token <- self.ownedNFTs.remove(key: withdrawID)
                 ?? panic("Cannot withdraw: NFT does not exist in the collection")
             emit Withdraw(id: token.id, from: self.owner?.address)
             return <-token
         }
 
-        pub fun batchWithdraw(ids: [UInt64]): @NonFungibleToken.Collection {
+        access(NonFungibleToken.Withdraw) fun batchWithdraw(ids: [UInt64]): @{NonFungibleToken.Collection} {
             var batchCollection <- create Collection()
             for id in ids {
                 batchCollection.deposit(token: <-self.withdraw(withdrawID: id))
             }
-            return <-batchCollection
+            return <- batchCollection
         }
 
-        pub fun deposit(token: @NonFungibleToken.NFT) {
+        access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
             let token <- token as! @TenantService.NFT
             let id = token.id
             let oldToken <- self.ownedNFTs[id] <- token
@@ -1500,7 +1507,7 @@ pub contract TenantService: NonFungibleToken {
             destroy oldToken
         }
 
-        pub fun batchDeposit(tokens: @NonFungibleToken.Collection) {
+        access(all) fun batchDeposit(tokens: @{NonFungibleToken.Collection}) {
             let keys = tokens.getIDs()
             for key in keys {
                 self.deposit(token: <-tokens.withdraw(withdrawID: key))
@@ -1508,30 +1515,30 @@ pub contract TenantService: NonFungibleToken {
             destroy tokens
         }
 
-        pub fun getIDs(): [UInt64] {
+        access(all) view fun getIDs(): [UInt64] {
             return self.ownedNFTs.keys
         }
 
-        pub fun borrowNFT(id: UInt64): &NonFungibleToken.NFT {
+        access(all) view fun borrowNFT(_ id: UInt64): &{NonFungibleToken.NFT}? {
             pre {
                 TenantService.isObjectType(id, ObjectType.NFT): "Id supplied is not for an nft"
             }
-            return (&self.ownedNFTs[id] as &NonFungibleToken.NFT?)!
+            return &self.ownedNFTs[id]
         }
 
-        pub fun borrowNFTData(id: UInt64): &TenantService.NFT? {
+        access(all) fun borrowNFTData(id: UInt64): &TenantService.NFT? {
             pre {
                 TenantService.isObjectType(id, ObjectType.NFT): "Id supplied is not for an nft"
             }
             if self.ownedNFTs[id] != nil {
-                let ref = (&self.ownedNFTs[id] as auth &NonFungibleToken.NFT?)!
+                let ref = (&self.ownedNFTs[id] as &{NonFungibleToken.NFT}?)!
                 return ref as! &TenantService.NFT
             } else {
                 return nil
             }
         }
 
-        pub fun borrowNFTDatas(ids: [UInt64]): [&TenantService.NFT] {
+        access(all) fun borrowNFTDatas(ids: [UInt64]): [&TenantService.NFT] {
             let nfts: [&TenantService.NFT] = []
             for id in ids {
                 let nft = self.borrowNFTData(id: id)
@@ -1542,7 +1549,7 @@ pub contract TenantService: NonFungibleToken {
             return nfts
         }
 
-        pub fun getNFTView(id: UInt64): NFTView? {
+        access(all) fun getNFTView(id: UInt64): NFTView? {
             pre {
                 TenantService.isObjectType(id, ObjectType.NFT): "Id supplied is not for an nft"
             }
@@ -1553,34 +1560,33 @@ pub contract TenantService: NonFungibleToken {
             return TenantService.getNFTView(nft!)
         }
 
-        destroy() {
-            destroy self.ownedNFTs
+        access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
+            return <- create Collection()
         }
     }
 
-    pub fun createEmptyCollection(): @NonFungibleToken.Collection {
-        return <-create TenantService.Collection()
+    access(all) fun createEmptyCollection(nftType: Type): @{NonFungibleToken.Collection} {
+        return <- create TenantService.Collection()
     }
 
     // ShardedCollection stores a dictionary of TenantService Collections
     // An NFT is stored in the field that corresponds to its id % numBuckets
     //
-    pub resource ShardedCollection: CollectionPublic, NonFungibleToken.Provider, NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic {
-
-        pub var collections: @{UInt64: Collection}
-        pub let numBuckets: UInt64
+    access(all) resource ShardedCollection: CollectionPublic, NonFungibleToken.Provider, NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic {
+        access(all) var collections: @{UInt64: Collection}
+        access(all) let numBuckets: UInt64
 
         init(numBuckets: UInt64) {
             self.collections <- {}
             self.numBuckets = numBuckets
             var i: UInt64 = 0
             while i < numBuckets {
-                self.collections[i] <-! TenantService.createEmptyCollection() as! @Collection
-                i = i + UInt64(1)
+                destroy self.collections.insert(key: i, <- TenantService.createEmptyCollection(nftType: Type<@NFT>()) as! @Collection)
+                i = i + 1
             }
         }
 
-        pub fun withdraw(withdrawID: UInt64): @NonFungibleToken.NFT {
+        access(NonFungibleToken.Withdraw) fun withdraw(withdrawID: UInt64): @{NonFungibleToken.NFT} {
             post {
                 result.id == withdrawID: "The ID of the withdrawn NFT is incorrect"
             }
@@ -1589,22 +1595,22 @@ pub contract TenantService: NonFungibleToken {
             return <-token
         }
 
-        pub fun batchWithdraw(ids: [UInt64]): @NonFungibleToken.Collection {
-            var batchCollection <- TenantService.createEmptyCollection()
+        access(NonFungibleToken.Withdraw) fun batchWithdraw(ids: [UInt64]): @{NonFungibleToken.Collection} {
+            var batchCollection <- TenantService.createEmptyCollection(nftType: Type<@NFT>())
             for id in ids {
                 batchCollection.deposit(token: <-self.withdraw(withdrawID: id))
             }
             return <-batchCollection
         }
 
-        pub fun deposit(token: @NonFungibleToken.NFT) {
+        access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
             let bucket = token.id % self.numBuckets
             let collection <- self.collections.remove(key: bucket)!
             collection.deposit(token: <-token)
             self.collections[bucket] <-! collection
         }
 
-        pub fun batchDeposit(tokens: @NonFungibleToken.Collection) {
+        access(all) fun batchDeposit(tokens: @{NonFungibleToken.Collection}) {
             let keys = tokens.getIDs()
             for key in keys {
                 self.deposit(token: <-tokens.withdraw(withdrawID: key))
@@ -1612,27 +1618,39 @@ pub contract TenantService: NonFungibleToken {
             destroy tokens
         }
 
-        pub fun getIDs(): [UInt64] {
-            var ids: [UInt64] = []
-            for key in self.collections.keys {
-                for id in self.collections[key]?.getIDs() ?? [] {
-                    ids.append(id)
-                }
+        access(all) view fun getIDs(): [UInt64] {
+            // var ids: [UInt64] = []
+            // for key in self.collections.keys {
+            //     for id in self.collections[key]?.getIDs() ?? [] {
+            //         ids.append(id)
+            //     }
+            // }
+            // return ids
+            // TODO: Can this even be done? It is required that this is a view function
+            return []
+        }
+
+        access(all) view fun getSupportedNFTTypes(): {Type: Bool} {
+            return {
+                Type<@NFT>(): true
             }
-            return ids
         }
 
-        pub fun borrowNFT(id: UInt64): &NonFungibleToken.NFT {
+        access(all) view fun isSupportedNFTType(type: Type): Bool {
+            return type == Type<@NFT>()
+        }
+
+        access(all) view fun borrowNFT(_ id: UInt64): &{NonFungibleToken.NFT}? {
             let bucket = id % self.numBuckets
-            return self.collections[bucket]?.borrowNFT(id: id)!
+            return self.collections[bucket]?.borrowNFT(id)!
         }
 
-        pub fun borrowNFTData(id: UInt64): &TenantService.NFT? {
+        access(all) fun borrowNFTData(id: UInt64): &TenantService.NFT? {
             let bucket = id % self.numBuckets
             return self.collections[bucket]?.borrowNFTData(id: id) ?? nil
         }
 
-        pub fun borrowNFTDatas(ids: [UInt64]): [&TenantService.NFT] {
+        access(all) fun borrowNFTDatas(ids: [UInt64]): [&TenantService.NFT] {
             let nfts: [&TenantService.NFT] = []
             for id in ids {
                 let nft = self.borrowNFTData(id: id)
@@ -1643,17 +1661,38 @@ pub contract TenantService: NonFungibleToken {
             return nfts
         }
 
-        pub fun getNFTView(id: UInt64): NFTView? {
+        access(all) fun getNFTView(id: UInt64): NFTView? {
             let bucket = id % self.numBuckets
             return self.collections[bucket]?.getNFTView(id: id) ?? nil
         }
 
-        destroy() {
-            destroy self.collections
+        access(contract) fun burnCallback() {
+            for k in self.collections.keys {
+                let collection <- self.collections.remove(key: k)!
+                Burner.burn(<-collection)
+            }
+        }
+
+        access(all) view fun getLength(): Int {
+            var count = 0
+            for key in self.collections.keys {
+                count = count + (self.collections[key]?.getLength() ?? 0)
+            }
+
+            return count
+        }
+
+        access(all) fun forEachID(_ f: fun (UInt64): Bool): Void {
+            for key in self.collections.keys {
+                let ref: &Collection = (&self.collections[key] as &Collection?)!
+                for id in ref.ownedNFTs.keys {
+                    f(id)
+                }
+            }
         }
     }
 
-    pub fun createEmptyShardedCollection(numBuckets: UInt64): @ShardedCollection {
+    access(all) fun createEmptyShardedCollection(numBuckets: UInt64): @ShardedCollection {
         return <-create ShardedCollection(numBuckets: numBuckets)
     }
 
@@ -1663,86 +1702,86 @@ pub contract TenantService: NonFungibleToken {
 
     // The type of a meta data field
     //
-    pub enum MetadataFieldType: UInt8 {
-        pub case STRING
-        pub case MIME
-        pub case NUMBER
-        pub case BOOLEAN
-        pub case DATE
-        pub case DATE_TIME
-        pub case URL
-        pub case URL_WITH_HASH
-        pub case GEO_POINT
+    access(all) enum MetadataFieldType: UInt8 {
+        access(all) case STRING
+        access(all) case MIME
+        access(all) case NUMBER
+        access(all) case BOOLEAN
+        access(all) case DATE
+        access(all) case DATE_TIME
+        access(all) case URL
+        access(all) case URL_WITH_HASH
+        access(all) case GEO_POINT
     }
 
     // a meta data field of variable type
     //
-    pub struct MetadataField {
-        pub let type: MetadataFieldType
-        pub let value: AnyStruct
+    access(all) struct MetadataField {
+        access(all) let type: MetadataFieldType
+        access(all) let value: AnyStruct
 
         init(_ type: MetadataFieldType, _ value: AnyStruct) {
             self.type = type
             self.value = value
         }
 
-        pub fun getMimeValue(): Mime? {
+        access(all) fun getMimeValue(): Mime? {
             if self.type != MetadataFieldType.MIME {
                 return nil
             }
             return self.value as? Mime
         }
 
-        pub fun getStringValue(): String? {
+        access(all) fun getStringValue(): String? {
             if self.type != MetadataFieldType.STRING {
                 return nil
             }
             return self.value as? String
         }
 
-        pub fun getNumberValue(): String? {
+        access(all) fun getNumberValue(): String? {
             if self.type != MetadataFieldType.NUMBER {
                 return nil
             }
             return self.value as? String
         }
 
-        pub fun getBooleanValue(): Bool? {
+        access(all) fun getBooleanValue(): Bool? {
             if self.type != MetadataFieldType.BOOLEAN {
                 return nil
             }
             return self.value as? Bool
         }
 
-        pub fun getURLValue(): String? {
+        access(all) fun getURLValue(): String? {
             if self.type != MetadataFieldType.URL {
                 return nil
             }
             return self.value as? String
         }
 
-        pub fun getDateValue(): String? {
+        access(all) fun getDateValue(): String? {
             if self.type != MetadataFieldType.DATE {
                 return nil
             }
             return self.value as? String
         }
 
-        pub fun getDateTimeValue(): String? {
+        access(all) fun getDateTimeValue(): String? {
             if self.type != MetadataFieldType.DATE_TIME {
                 return nil
             }
             return self.value as? String
         }
 
-        pub fun getURLWithHashValue(): URLWithHash? {
+        access(all) fun getURLWithHashValue(): URLWithHash? {
             if self.type != MetadataFieldType.URL_WITH_HASH {
                 return nil
             }
             return self.value as? URLWithHash
         }
 
-        pub fun getGeoPointValue(): GeoPoint? {
+        access(all) fun getGeoPointValue(): GeoPoint? {
             if self.type != MetadataFieldType.GEO_POINT {
                 return nil
             }
@@ -1752,10 +1791,10 @@ pub contract TenantService: NonFungibleToken {
 
     // A url with a hash of the contents found at the url
     //
-    pub struct URLWithHash {
-        pub let url: String
-        pub let hash: String?
-        pub let hashAlgo: String?
+    access(all) struct URLWithHash {
+        access(all) let url: String
+        access(all) let hash: String?
+        access(all) let hashAlgo: String?
         init(_ url: String, _ hash: String, _ hashAlgo: String?) {
             self.url = url
             self.hash = hash
@@ -1765,9 +1804,9 @@ pub contract TenantService: NonFungibleToken {
 
     // A geo point without any specific projection
     //
-    pub struct GeoPoint {
-        pub let lat: UFix64
-        pub let lng: UFix64
+    access(all) struct GeoPoint {
+        access(all) let lat: UFix64
+        access(all) let lng: UFix64
         init(_ lat: UFix64, _ lng: UFix64) {
             self.lat = lat
             self.lng = lng
@@ -1776,12 +1815,22 @@ pub contract TenantService: NonFungibleToken {
 
     // A piece of Mime content
     //
-    pub struct Mime {
-        pub let type: String
-        pub let bytes: [UInt8]
+    access(all) struct Mime {
+        access(all) let type: String
+        access(all) let bytes: [UInt8]
         init(_ type: String, _ bytes: [UInt8]) {
             self.type = type
             self.bytes = bytes
         }
     }
+
+    access(all) view fun getContractViews(resourceType: Type?): [Type] {
+        return []
+    }
+
+    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
+        return nil
+    }
+
+    access(all) 
 }
